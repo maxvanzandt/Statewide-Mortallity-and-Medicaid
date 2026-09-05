@@ -1,0 +1,304 @@
+---
+title: "3220 Project BACKUP"
+author: "Maximilian Van Zandt"
+date: "2023-11-25"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+### **Data Cleaning**
+
+```{r, echo=FALSE, warning=FALSE,results=FALSE}
+library(dplyr)
+library(tidyverse)
+library(tinytex)
+library(RColorBrewer)
+library(corrplot)
+library(Hmisc)
+library(olsrr)
+library(car)
+library(MASS)
+Data <- read.csv("data/processed/merged_data.csv")
+```
+
+
+```{r, echo=FALSE, warning=FALSE,results=FALSE}
+library(ggplot2)
+
+ggplot(Data, aes(x = DeathRate)) +
+  geom_histogram(binwidth=100, fill = "lightblue", color = "black") +
+  labs(x = "Death Rate", y = "Frequency") +
+  ggtitle("Histogram of Death Rate")
+
+#Correlation matrix between medicare enrollment rates and death rate
+CorMD<-cor(Data$MedicareEnr, Data$DeathRate)
+cat("Correlation between Medicare Enrollment Rate and Death Rate:", CorMD)
+
+
+#Correlation between drug overdose rate and death rate
+CorDOD<-cor(Data$OverdoseDeaths, Data$DeathRate)
+cat("Correlation between Drug Overdose Rate and Death Rate:", CorDOD)
+
+#Side-by-side boxplot for COVID and death rate (Research Question - Numeric)
+ggplot(Data, aes(x = LiftCOVID, y = DeathRate, fill = LiftCOVID)) +
+  geom_boxplot(color = "Black",lwd=0.5)+labs(x = "Lifted COVID Restrictions", y = "Death Rate", title = "Lifted COVID Restrictions on Death Rate", fill="Legend")+theme(plot.title = element_text(hjust = 0.5))
+
+#Scatter plot between Medicaid spending per capita and death rate
+ggplot(data=Data, aes(x=MedicaidSpend, y=DeathRate))+labs(x="Medicaid Spending per Capita",y="Death Rate",title="Medicaid Spending per Capita on Death Rate")+geom_point()
+
+#Interaction plot between political majority and COVID restrictions on death rate
+ggplot(Data, aes(x = LiftCOVID, color = PoliticalMaj, group = PoliticalMaj, y = DeathRate))+stat_summary(fun.y = mean, geom = "point")+stat_summary(fun.y = mean, geom = "line")
+
+#Side-by-side boxplot between the percentage of the senior population and the death rate
+ggplot(Data, aes(x = SeniorPop, y = DeathRate, fill = SeniorPop)) +
+  geom_boxplot(color = "Black",lwd=0.5)+labs(x = "Percentage of Senior Population", y = "Death Rate", title = "Percentage of Senior Population on Death Rate", fill="Legend")+theme(plot.title = element_text(hjust = 0.5))
+
+
+#Correlation between obesity prevalence and death rate
+CorOPD<-cor(Data$ObesityPrev, Data$DeathRate)
+cat("Correlation between Obesity Prevalence and Death Rate:", CorOPD)
+
+
+#Correlation between population density and death rate
+CorPD<-cor(Data$PopPerCap, Data$DeathRate)
+cat("Correlation between Population Density and Death Rate:", CorPD)
+
+
+```
+
+```{r, echo=FALSE, warning=FALSE,results=FALSE}
+names(Data)
+```
+
+### **Part 2: Analysis and Model Building**
+
+### **Stage 1: Quantitative Variables**
+
+*Initial:* $DeathRate = \beta_0+\beta_1ObesityPrev+\beta_2OverdoseDeaths+\beta_3MedicareEnr+\beta_4MedicaidSpend+\beta_5PopPerCap$
+
+**EDA: Scatterplots and Multicolinearity**
+
+```{r}
+#Scatter plots for quantitative variables
+
+for (i in names(Data)[c(3:5, 10:11)]) {
+  print(ggplot(data = Data, aes_string(x = i, y = "DeathRate")) +
+    labs(x = i, y = "Death Rate") +
+    geom_point())
+}
+
+#Multicolinearity
+Datacor<-round(cor(Data[,-c(1,2,6,7,8,9)]),4)
+Datacor
+corrplot(Datacor)
+#VIF
+Datamod1<-lm(DeathRate~ObesityPrev+OverdoseDeaths+MedicareEnr+MedicaidSpend+PopPerCap,data=Data)
+vif(Datamod1)
+mean(vif(Datamod1))
+
+
+#Correlations for quantitative variables
+round(cor(Data[c(3:5,10:11)],Data$DeathRate),3)
+```
+
+Multicolinearity Conclusion: No evidence of severe multicolinearity. No individual VIFs greater than 10 and average VIF is less than 3.
+
+**Variable Screening: Stepwise Regression**
+
+```{r}
+#Variable Screening (Stepwise Regression)
+ols_step_both_p(Datamod1,pent=0.1,prem=0.3,details=F)
+```
+
+Stepwise Resulting Model: $DeathRate = \beta_0+\beta_1ObesityPrev+\beta_2OverdoseDeaths+\beta_5PopPerCap$
+
+
+**Adding Higher Order Term (PopPerCap)**
+
+```{r}
+Datamod2<-lm(DeathRate~ObesityPrev+OverdoseDeaths+PopPerCap+I(PopPerCap^2),data=Data)       
+summary(Datamod2)
+```
+
+Significant so ADD (t test)
+
+**Adding Quant x Quant Interaction**
+
+```{r}
+Datamod3<-lm(DeathRate~ObesityPrev+OverdoseDeaths+PopPerCap+ObesityPrev*OverdoseDeaths,data=Data)       
+summary(Datamod3)
+```
+
+Not Significant so REMOVE (t test)
+
+**Final Quant Model**
+
+```{r}
+Datamod2<-lm(DeathRate~ObesityPrev+OverdoseDeaths+PopPerCap+I(PopPerCap^2),data=Data)       
+summary(Datamod2)
+```
+
+*Global F Test:*
+
+Hypothesis: Null - model is not adequate Alternative - model is adequate
+
+Decision: 0.0001\<0.05 -\> REJECT H0
+
+Conclusion: The model with obesity prevalence, overdose death rate, population per capita, and population per capita squared is adequate at predicting death rate.
+
+**Quantitative Variables Summary:**
+
+Initial: $DeathRate = \beta_0+\beta_1ObesityPrev+\beta_2OverdoseDeaths+\beta_3MedicareEnr+\beta_4MedicaidSpend+\beta_5PopPerCap$
+
+Result from Stepwise: $DeathRate = \beta_0+\beta_1ObesityPrev+\beta_2OverdoseDeaths+\beta_3PopPerCap$
+
+Test higher order term: $\beta_4PopPerCap^2$ -- Significant (individual t test)
+
+Test Quant x Quant Interaction: $\beta_5ObesityPrev*OverdoseDeaths$ -- NOT Significant (individual t test)
+
+Final: $DeathRate = \beta_0+\beta_1ObesityPrev+\beta_2OverdoseDeaths+\beta_3PopPerCap+\beta_4PopPerCap^2$
+
+### **Stage 2: Qualitative Variables**
+
+*Initial:* $DeathRate = \beta_0+\beta_1ObesityPrev+\beta_2OverdoseDeaths+\beta_3PopPerCap+\beta_4PopPerCap^2+\beta_5SeniorPopM+\beta_6SeniorPopH+\beta_6PoliticalMajR+\beta_7LiftCOVIDY$
+
+where SeniorPopM = 1 if Medium, 0 otherwise
+
+SeniorPopH = 1 if High, 0 otherwise
+
+PoliticalMajR = 1 if Republican, 0 otherwise
+
+LiftCOVIDY = 1 if Yes, 0 otherwise
+
+**EDA: Side-by-side Boxplots**
+
+```{r}
+#Boxplots for Qualitative Variables
+cbp1 <- c("#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+Data$SeniorPop <- factor(Data$SeniorPop, levels = c("Low", "Medium", "High"))
+
+ggplot(Data, aes(x = SeniorPop, y = DeathRate, fill = SeniorPop)) +
+  geom_boxplot(color = "Black",lwd=0.5)+labs(x = "Percentage of Senior Population", y = "Death Rate", title = "Percentage of Senior Population on Death Rate", fill="Legend")+theme(plot.title = element_text(hjust = 0.5))+scale_fill_manual(values = cbp1)
+
+ggplot(Data, aes(x = LiftCOVID, y = DeathRate, fill = LiftCOVID)) +
+  geom_boxplot(color = "Black",lwd=0.5)+labs(x = "Lifted COVID Restrictions", y = "Death Rate", title = "Lifted COVID Restrictions on Death Rate", fill="Legend")+theme(plot.title = element_text(hjust = 0.5))+scale_fill_manual(values = cbp1)
+
+ggplot(Data, aes(x = PoliticalMaj, y = DeathRate, fill = PoliticalMaj)) +
+  geom_boxplot(color = "Black",lwd=0.5)+labs(x = "Political Majority", y = "Death Rate", title = "Political Majority on Death Rate", fill="Legend")+theme(plot.title = element_text(hjust = 0.5))+scale_fill_manual(values = c("D" = "#56B4E9", "R" = "#FF6666"))
+```
+
+```{r}
+Datamod4<-lm(DeathRate~ObesityPrev+OverdoseDeaths+PopPerCap+I(PopPerCap^2)+SeniorPop+PoliticalMaj+LiftCOVID,data=Data)       
+summary(Datamod4)
+#Nested F Test
+NestDatamod<-lm(DeathRate~ObesityPrev+OverdoseDeaths+PopPerCap+I(PopPerCap^2)+PoliticalMaj+LiftCOVID,data=Data) 
+anova(NestDatamod,Datamod4)
+```
+
+Initial: $DeathRate = \beta_0+\beta_1ObesityPrev+\beta_2OverdoseDeaths+\beta_3PopPerCap+\beta_4PopPerCap^2+\beta_5SeniorPopM+\beta_6SeniorPopH+\beta_6PoliticalMajR+\beta_7LiftCOVIDY$
+
+Final: $DeathRate = \beta_0+\beta_1ObesityPrev+\beta_2OverdoseDeaths+\beta_3PopPerCap+\beta_4PopPerCap^2$
+
+Note: NO qualitative variables were signficant.
+
+Datamod5<-lm(DeathRate~ObesityPrev+OverdoseDeaths+PopPerCap+I(PopPerCap^2),data=Data)       
+
+
+### **Stage 3: Interactions**
+
+```{r}
+#Interactions
+ggplot(Data, aes(x = MedicaidSpend, y = DeathRate, color = PoliticalMaj))+geom_point()+labs(x="Medicaid Spending", y="Death Rate")+scale_color_manual(values = c("D" = "#56B4E9", "R" = "#FF6666"))+theme(legend.position = "top")
+
+ggplot(Data, aes(x = MedicareEnr, y = DeathRate, color = PoliticalMaj))+geom_point()+labs(x="Medicare Enrollment", y="Death Rate")+scale_color_manual(values = c("D" = "#56B4E9", "R" = "#FF6666"))+theme(legend.position = "top")
+
+ggplot(Data, aes(x = MedicareEnr, y = DeathRate, color = SeniorPop))+geom_point()+labs(x="Medicare Enrollment", y="Death Rate")+scale_fill_manual(values = cbp1)+theme(legend.position = "top")
+
+ggplot(Data, aes(x = MedicareEnr, y = DeathRate, color = PoliticalMaj))+geom_point()+labs(x="Medicare Enrollment", y="Death Rate")+scale_color_manual(values = c("D" = "#56B4E9", "R" = "#FF6666"))+theme(legend.position = "top")
+```
+
+**Conclusion:** No Qual x Quant interactions because all of the qualitative variables have been removed due to lack of significance. Additionally, the EDA does not provide evidence to indicate an interaction.
+
+Potential Title: What Kills? Factors that Affect State Death Rates
+
+### **Regression Assumptions**
+```{r}
+Datamod5<-lm(DeathRate~ObesityPrev+OverdoseDeaths+PopPerCap+I(PopPerCap^2),data=Data)
+summary(Datamod5)
+#Lack of Fit (Residual Plots)
+residualPlots(Datamod5,tests=F)
+
+#Constant Variance (Residual Plots and Residual vs Fitted)
+residualPlots(Datamod5,tests=F)
+plot(Datamod5, which=1)
+
+#Normality (QQ Plot and Histogram of Residuals)
+plot(Datamod5, which=2)
+hist(residuals(Datamod5))
+```
+Lack of Fit (Residual Plots): This assumption does not appear to be violated because there doesn't appear to be any trends that can be modeled by a transformation (quadratic, logarithmic, etc.).
+
+Constant Variance (Residual Plots and Residual vs Fitted): Many of the residual plots including residual vs fitted, residual vs horsepower, residual vs. compression ratio show a fanning out pattern and the values for the residual vs. compression ratio plot are clustered on either end and inconsistently. This indicates a violation of the constant variance assumption.
+
+Normality (QQ Plot and Histogram of Residuals): The Q-Q plot shows the residuals deviate from the line in both directions. Additionally, the histogram of the residuals is close to being normally distributed, but has outliers that force a skew. In conclusion the assumption is violated, but might not be of serious concern.
+
+**Conclusion:** Transform the PopPerCap variable. We'll use the log transformation.
+
+**Transformation and Re-test Assumptions**
+```{r}
+Datamod6<-lm(DeathRate~ObesityPrev+OverdoseDeaths+I(log(PopPerCap)),data=Data)
+summary(Datamod6)
+
+#Lack of Fit (Residual Plots)
+residualPlots(Datamod6,tests=F)
+
+#Constant Variance (Residual Plots and Residual vs Fitted)
+residualPlots(Datamod6,tests=F)
+plot(Datamod6, which=1)
+
+#Normality (QQ Plot and Histogram of Residuals)
+plot(Datamod6, which=2)
+hist(residuals(Datamod6))
+```
+
+The constant variance assumption has been met now. Therefore, the log transformation successfully fixed the model and we can conclude that it is the final model of our analysis.
+
+**FINAL MODEL:** $DeathRate = \beta_0+\beta_1ObesityPrev+\beta_2OverdoseDeaths+\beta_3log(PopPerCap)$
+
+### **Specifics for additional technique**
+
+1.  Variable Screening (Stepwise Regression) - Done in previous section
+
+2.  Influential Observations
+
+```{r}
+Datamod6<-lm(DeathRate~ObesityPrev+OverdoseDeaths+I(log(PopPerCap)),data=Data)  
+plot(Datamod6,which=4)
+influencePlot(Datamod6,fill=F)
+```
+
+
+3.  Weighted Least Squares (Weighting each observation)
+
+```{r}
+wt<-1/lm(abs(Datamod6$residuals)~Datamod6$fitted.values)$fitted.values^2
+
+#perform weighted least squares regression
+Datamod6 <- lm(DeathRate~ObesityPrev+OverdoseDeaths+I(log(PopPerCap)),data=Data, weights=wt)
+summary(Datamod6)
+
+#Lack of Fit (Residual Plots)
+residualPlots(Datamod6,tests=F)
+
+#Constant Variance (Residual Plots and Residual vs Fitted)
+residualPlots(Datamod6,tests=F)
+plot(Datamod6, which=1)
+
+#Normality (QQ Plot and Histogram of Residuals)
+plot(Datamod6, which=2)
+hist(residuals(Datamod6))
+```

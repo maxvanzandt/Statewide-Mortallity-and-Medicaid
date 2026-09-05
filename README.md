@@ -41,12 +41,12 @@ Additional context sources consulted for the project report: KFF issue briefs on
 2. Set your R working directory to the repo root.
 3. Run `clean_data.R` to merge and clean the data into 
    `data/processed/merged_data.csv`.
-4. Knit `analysis_code.Rmd` to reproduce the analysis and figures.
+4. Knit `analysis.Rmd` to reproduce the analysis and figures.
 
 ## Files
 
 - `clean_data.R` - merges and cleans the raw data (see Data Sources above for where to obtain each file)
-- `analysis_code.Rmd` - exploratory analysis, model building, and diagnostics
+- `analysis.Rmd` - exploratory analysis, model building, and diagnostics
 - `report.pdf` - final written report
 - `poster.pdf` - presentation poster
 

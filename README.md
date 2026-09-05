@@ -45,10 +45,10 @@ Additional context sources consulted for the project report: KFF issue briefs on
 
 ## Files
 
-- `clean_data.R` — merges and cleans the raw data (see Data Sources above for where to obtain each file)
-- `analysis_code.Rmd` — exploratory analysis, model building, and diagnostics
-- `report.pdf` — final written report
-- `poster.pdf` — presentation poster
+- `clean_data.R` - merges and cleans the raw data (see Data Sources above for where to obtain each file)
+- `analysis_code.Rmd` - exploratory analysis, model building, and diagnostics
+- `report.pdf` - final written report
+- `poster.pdf` - presentation poster
 
 ## License
 
